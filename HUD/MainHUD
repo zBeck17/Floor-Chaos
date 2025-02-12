@@ -1,0 +1,209 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local PlayerService = game:GetService("Players")
+
+local Player = PlayerService.LocalPlayer
+local PlayerGui = Player.PlayerGui
+
+local MainHUD = PlayerGui.MainHud
+
+local Money: IntValue = Player.Money
+local ItemsFolder = Player.ItemsFolder
+
+local InvTweenInfo = TweenInfo.new(.6, Enum.EasingStyle.Quint)
+
+local Connections = {}
+
+local module = {}
+
+local function InitUI()
+	
+	--// Util Function
+	local function Preset(Frame, Pos, Size)
+		if Pos then
+			Frame.Position = Pos
+		end
+		
+		if Size then
+			Frame.Size = Size
+		end
+	end
+	
+	local function DisconnectAll()
+		for i, connections in pairs(Connections) do
+			connections:Disconnect()
+		end
+		table.clear(Connections)
+	end
+	
+	--// Inventory Manager Function
+	
+	local function InventoryHandler(HandlerButton)
+		--//** Variables **\\-- 
+		local InvContainer = MainHUD.InvContainer
+		local InvItemsContainer = InvContainer.InvItemsContainer
+
+		local closeButton = InvContainer.CloseButton
+
+		local OpenTween = TweenService:Create(InvContainer, InvTweenInfo, {Size = UDim2.fromScale(0.323, 0.701)})
+		local CloseTween = TweenService:Create(InvContainer, InvTweenInfo, {Size = UDim2.fromScale(0.323, 0.01)})
+		
+		--//** Private Functions **\\-- 
+		
+		--** Inventory Active Item Manager Function **-- 
+		local function InvActive(ItemWhoCalled)
+			local InvActiveContainer = MainHUD.InvActiveFrame
+			
+			local ItemName = InvActiveContainer.ItemName
+			local ItemPhoto = InvActiveContainer.ItemPhoto; local NO_PHOTO_DATA_TEXT = ItemPhoto.NO_PHOTO_DATA
+			
+			local CloseButton = InvActiveContainer.CloseButton
+			local ActiveButton = InvActiveContainer.ActiveButton
+			
+			local OpenActiveTween = TweenService:Create(InvActiveContainer, InvTweenInfo, {Size = UDim2.fromScale(0.26, 0.701)})
+			local CloseActiveTween = TweenService:Create(InvActiveContainer, InvTweenInfo, {Size = UDim2.fromScale(0.26, 0.01)})
+			
+			local ItemInFolder = ItemsFolder[ItemWhoCalled.Name]
+			
+			Preset(InvActiveContainer, _, UDim2.fromScale(0.26, 0.01)) --preset
+			ItemName.Text = ItemWhoCalled.Name
+			
+			if ItemInFolder:GetAttribute("HavePhotoData") then
+				NO_PHOTO_DATA_TEXT.Visible = false
+			else
+				NO_PHOTO_DATA_TEXT.Visible = true
+			end
+			
+			CloseTween:Play()
+			task.wait(InvTweenInfo.Time - .2)
+			InvContainer.Visible = false
+			task.wait(.001)
+			InvActiveContainer.Visible = true
+			OpenActiveTween:Play()
+			
+			ActiveButton.Activated:Once(function()
+				ActiveButton.Text = "ACTIVED"
+				ActiveButton.BackgroundColor3 = Color3.fromRGB(255,0,0)
+				ItemInFolder:SetAttribute("Actived", true)
+			end)
+			
+			CloseButton.Activated:Once(function()
+				CloseActiveTween:Play()
+				task.wait(InvTweenInfo.Time - .2)
+				InvActiveContainer.Visible = false
+				InvContainer.Visible = true
+				OpenTween:Play()
+			end)
+		end
+		
+		--** Remover botoes **--
+		local function RemoveAllButtons()
+			for _, buttonItems in pairs(InvItemsContainer:GetChildren()) do
+				if buttonItems.Name == "Template" then continue end
+
+				buttonItems:Destroy()
+			end
+		end
+		
+		--** Funcao responsavel por fazer os botoes dos items funcionais (com nome, visivel) **--
+		local function MakeItemsButtonFunctional()
+			local TemplateItem = InvItemsContainer.Template
+
+			for _, items in pairs(ItemsFolder:GetChildren()) do
+				if InvItemsContainer:FindFirstChild(items.Name) then continue end
+				local ItemUI = TemplateItem:Clone()
+				ItemUI.Visible = true
+				ItemUI.Name = items.Name
+				ItemUI.Text = items.Name
+				ItemUI.Parent = InvItemsContainer
+				
+				ItemUI.Activated:Connect(function()
+					InvActive(ItemUI)
+				end)
+			end
+			print(Connections, "MakeItemsButtonFuncional() -> chamada teste")
+		end
+		
+		--** presets **--
+		
+		Preset(InvContainer, UDim2.fromScale(0.542,0.535), UDim2.fromScale(0.323, 0.01)) -- configs padrao
+		MakeItemsButtonFunctional()
+		
+		HandlerButton.Active = false
+		InvContainer.Visible = true
+		task.wait(.05)
+		OpenTween:Play()
+		
+		--** Events **--
+		Connections["CloseConnection"] = closeButton.Activated:Connect(function()
+			CloseTween:Play()
+			task.wait(CloseTween.TweenInfo.Time - .2)
+			InvContainer.Visible = false
+			HandlerButton.Active = true
+			
+			DisconnectAll()
+		end)
+		print("Inventory() -> Checando a table de conexões: ", Connections)
+	end
+	
+	--// ShopUI Manager Function
+	
+	local function Shop(HandlerButton)
+		print("Shop() -> chamada padrao!")
+		
+		local ShopContainer = MainHUD.ShopContainer
+		
+		local CloseButton = ShopContainer.CloseButton
+		
+		local OpenTween = TweenService:Create(ShopContainer, InvTweenInfo, {Size = UDim2.fromScale(0.441, 0.701)})
+		local CloseTween = TweenService:Create(ShopContainer, InvTweenInfo, {Size = UDim2.fromScale(0.441, 0.01)})
+		
+		Preset(ShopContainer, _, UDim2.new(0.441, 0.01))
+		
+		HandlerButton.Active = false
+		ShopContainer.Visible = true
+		task.wait(.05)
+		OpenTween:Play()
+		
+		CloseButton.Activated:Once(function()
+			CloseTween:Play()
+			task.wait(CloseTween.TweenInfo.Time - .2)
+			ShopContainer.Visible = false
+			HandlerButton.Active = true
+			DisconnectAll()
+		end)
+	end
+	
+	--// MainButtons Manager Function
+	
+	local function UpdateMoney(value, moneyContainer)
+		print("UpdateMoney() -> ".. value)
+		local QuantityText = moneyContainer.Quantity
+		
+		QuantityText.Text = value
+	end
+	
+	local function ButtonsUI()
+		local ButtonContainer = MainHUD.ButtonContainer
+		
+		local Money_Container = ButtonContainer.MoneyContainer
+		
+		local InventoryButton = ButtonContainer.InventoryButton
+		local ShopButton = ButtonContainer.ShopButton
+		
+		ShopButton.Activated:Connect(function()
+			Shop(ShopButton)
+		end)
+		InventoryButton.Activated:Connect(function()
+			InventoryHandler(InventoryButton)
+		end)
+		
+		Money.Changed:Connect(function(value)
+			UpdateMoney(value, Money_Container)
+		end)
+	end
+	ButtonsUI()
+end
+InitUI()
+
+return module
